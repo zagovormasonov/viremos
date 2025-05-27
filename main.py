@@ -55,5 +55,7 @@ async def submit_card(
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))  # Render задаёт PORT в env
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", 10000))  # Render задаёт PORT автоматически
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+
+
