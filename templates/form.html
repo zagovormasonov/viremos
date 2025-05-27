@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CBT Карточка</title>
+</head>
+<body>
+    <h1>Создание CBT карточки</h1>
+    <form method="post">
+        <label>Ситуация:<br><textarea name="situation" required></textarea></label><br><br>
+        <label>Мысли:<br><textarea name="thoughts" required></textarea></label><br><br>
+        <label>Эмоции:<br><textarea name="emotions" required></textarea></label><br><br>
+        <label>Поведение:<br><textarea name="behavior" required></textarea></label><br><br>
+        <button type="submit">Отправить</button>
+    </form>
+
+    {% if result %}
+        <h2>🔍 Анализ от ChatGPT:</h2>
+        <p>{{ result|safe }}</p>
+    {% endif %}
+</body>
+</html>
