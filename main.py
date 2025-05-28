@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import openai
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,10 +11,10 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
-# Разрешаем CORS для всех источников (можно ограничить при необходимости)
+# Разрешаем CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Укажи сюда адрес Flutter-приложения на проде
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,18 +38,15 @@ async def submit_card(
 Поведение: {behavior}
 
 Пожалуйста, предоставьте ответ в формате JSON, содержащем массив упражнений. Каждое упражнение должно быть представлено как объект со следующими полями:
-•  ‘title’: строка — название упражнения.
-•  ‘duration’: строка — примерное время выполнения (например, ‘10-15 минут’).
-•  ‘description’: строка — краткое описание упражнения, включая его цель и пользу для пользователя.
-•  ‘instructions’: строка — общие инструкции для пользователя перед началом упражнения.
-•  ‘steps’: массив объектов, каждый из которых описывает отдельный шаг упражнения. Каждый шаг должен содержать:
- •  ‘stepTitle’: строка — название шага.
- •  ‘stepDescription’: строка — подробное описание действий, которые нужно выполнить на этом шаге.
- •  ‘inputRequired’: булево значение (true/false) — указывает, требуется ли от пользователя ввести текст на этом шаге.
-Требования:
-•  Если шаг требует от пользователя записи мыслей, ответов или другой информации, установите ‘inputRequired’: true. Это позволит приложению автоматически добавить поле для ввода текста.
-•  Все поля должны быть заполнены корректными данными.
-•  Ответ должен содержать только JSON-структуру, без дополнительных комментариев или текста вне формата.
+•  'title': строка — название упражнения.
+•  'duration': строка — примерное время выполнения.
+•  'description': строка — краткое описание упражнения.
+•  'instructions': строка — общие инструкции.
+•  'steps': массив объектов с:
+    •  'stepTitle': строка — название шага.
+    •  'stepDescription': строка — что делать.
+    •  'inputRequired': true/false — нужно ли ввести текст.
+Ответ должен быть ТОЛЬКО в виде корректного JSON без лишнего текста.
 """
 
         response = openai.ChatCompletion.create(
@@ -59,12 +57,20 @@ async def submit_card(
             ]
         )
 
-        result = response["choices"][0]["message"]["content"]
-    except Exception as e:
-        print("❌ Ошибка при запросе к OpenAI API:", e)
-        result = "Ошибка при запросе к OpenAI API."
+        raw_result = response["choices"][0]["message"]["content"].strip()
 
-    return JSONResponse(content={"result": result}, media_type="application/json; charset=utf-8")
+        # Удалим обертки Markdown, если вдруг они остались
+        if raw_result.startswith("```json"):
+            raw_result = raw_result.removeprefix("```json").removesuffix("```").strip()
+
+        # Преобразуем в Python-объект
+        json_data = json.loads(raw_result)
+
+        return JSONResponse(content={"result": json_data}, media_type="application/json; charset=utf-8")
+
+    except Exception as e:
+        print("❌ Ошибка:", e)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # Для локального запуска
 if __name__ == "__main__":
