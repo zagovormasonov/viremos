@@ -1,31 +1,24 @@
-import openai
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import openai
 import os
 
-openai.api_key = "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"  # или замени на свой ключ напрямую в виде строки
+
+openai.api_key = "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"
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
 
-
-# Разрешаем CORS для Flutter
+# Разрешаем CORS для всех источников (можно ограничить при необходимости)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Укажи сюда адрес Flutter-приложения на проде
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
-async def get_form(request: Request):
-    return templates.TemplateResponse("form.html", {"request": request})
-
-
-@app.post("/", response_class=HTMLResponse)
+@app.post("/")
 async def submit_card(
     request: Request,
     situation: str = Form(...),
@@ -35,15 +28,15 @@ async def submit_card(
 ):
     try:
         prompt = f"""
-                Ты психолог. Проанализируй когнитивные искажения в следующей CBT-карточке:
+Ты психолог. Проанализируй когнитивные искажения в следующей CBT-карточке:
 
-                Ситуация: {situation}
-                Мысли: {thoughts}
-                Эмоции: {emotions}
-                Поведение: {behavior}
+Ситуация: {situation}
+Мысли: {thoughts}
+Эмоции: {emotions}
+Поведение: {behavior}
 
-                Выведи анализ, выделяя когнитивные искажения и рекомендации.
-            """
+Выведи анализ, выделяя когнитивные искажения и рекомендации.
+"""
 
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -58,14 +51,10 @@ async def submit_card(
         print("❌ Ошибка при запросе к OpenAI API:", e)
         result = "Ошибка при запросе к OpenAI API."
 
-    return templates.TemplateResponse("form.html", {
-        "request": request,
-        "result": result
-    })
+    return JSONResponse(content={"result": result})
 
+# Для локального запуска
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 10000))  # Render задаёт PORT автоматически
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
-
-
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
