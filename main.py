@@ -51,7 +51,7 @@ async def submit_card(
         print("❌ Ошибка при запросе к OpenAI API:", e)
         result = "Ошибка при запросе к OpenAI API."
 
-    return JSONResponse(content={"result": result})
+    return JSONResponse(content={"result": result}, media_type="application/json; charset=utf-8")
 
 # Для локального запуска
 if __name__ == "__main__":
