@@ -1,41 +1,47 @@
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 import openai
 import os
 import json
 from dotenv import load_dotenv
 
+# Загрузка переменных окружения
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Инициализация приложения
 app = FastAPI()
 
-# Разрешаем CORS
+# Настройка CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Разрешить все источники (можно указать конкретные)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Модель входных данных
+class CardInput(BaseModel):
+    situation: str
+    thoughts: str
+    emotions: str
+    behavior: str
+
+# Эндпоинт для получения карточки и генерации упражнений
 @app.post("/", response_class=JSONResponse)
-async def submit_card(
-    request: Request,
-    situation: str = Form(...),
-    thoughts: str = Form(...),
-    emotions: str = Form(...),
-    behavior: str = Form(...)
-):
+async def submit_card(card: CardInput):
     try:
+        # Формирование промпта для OpenAI
         prompt = f"""
 Пользователь предоставил следующую информацию о своей ситуации:
 
-Ситуация: {situation}
-Мысли: {thoughts}
-Эмоции: {emotions}
-Поведение: {behavior}
+Ситуация: {card.situation}
+Мысли: {card.thoughts}
+Эмоции: {card.emotions}
+Поведение: {card.behavior}
 
 Пожалуйста, предоставьте ответ в формате JSON, содержащем массив упражнений. Каждое упражнение должно быть представлено как объект со следующими полями:
 •  'title': строка — название упражнения.
@@ -59,24 +65,20 @@ async def submit_card(
 
         raw_result = response["choices"][0]["message"]["content"].strip()
 
+        # Удаление лишнего, если ответ начинается с ```json
         if raw_result.startswith("```json"):
             raw_result = raw_result.removeprefix("```json").removesuffix("```").strip()
 
+        # Парсинг JSON
         json_data = json.loads(raw_result)
 
-        return JSONResponse(
-            content={"result": json_data},
-            media_type="application/json"
-        )
+        return {"result": json_data}
 
     except Exception as e:
         print("❌ Ошибка:", e)
-        return JSONResponse(
-            content={"error": str(e)},
-            status_code=500,
-            media_type="application/json"
-        )
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
+# Локальный запуск
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
