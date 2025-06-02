@@ -20,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/")
+@app.post("/", response_class=JSONResponse)
 async def submit_card(
     request: Request,
     situation: str = Form(...),
@@ -59,20 +59,24 @@ async def submit_card(
 
         raw_result = response["choices"][0]["message"]["content"].strip()
 
-        # Удалим обертки Markdown, если вдруг они остались
         if raw_result.startswith("```json"):
             raw_result = raw_result.removeprefix("```json").removesuffix("```").strip()
 
-        # Преобразуем в Python-объект
         json_data = json.loads(raw_result)
 
-        return JSONResponse(content={"result": json_data}, media_type="application/json; charset=utf-8")
+        return JSONResponse(
+            content={"result": json_data},
+            media_type="application/json"
+        )
 
     except Exception as e:
         print("❌ Ошибка:", e)
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500,
+            media_type="application/json"
+        )
 
-# Для локального запуска
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
