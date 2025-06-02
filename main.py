@@ -11,13 +11,13 @@ from dotenv import load_dotenv
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Инициализация приложения
+# Инициализация FastAPI
 app = FastAPI()
 
-# Настройка CORS
+# Разрешение CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Разрешить все источники (можно указать конкретные)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,11 +30,10 @@ class CardInput(BaseModel):
     emotions: str
     behavior: str
 
-# Эндпоинт для получения карточки и генерации упражнений
+# Эндпоинт генерации упражнений
 @app.post("/", response_class=JSONResponse)
-async def submit_card(card: CardInput):
+async def generate_exercises(card: CardInput):
     try:
-        # Формирование промпта для OpenAI
         prompt = f"""
 Пользователь предоставил следующую информацию о своей ситуации:
 
@@ -43,7 +42,7 @@ async def submit_card(card: CardInput):
 Эмоции: {card.emotions}
 Поведение: {card.behavior}
 
-Пожалуйста, предоставьте ответ в формате JSON, содержащем массив упражнений. Каждое упражнение должно быть представлено как объект со следующими полями:
+Пожалуйста, предоставьте ответ на русском языке в формате JSON, содержащем массив упражнений. Каждое упражнение должно быть представлено как объект со следующими полями:
 •  'title': строка — название упражнения.
 •  'duration': строка — примерное время выполнения.
 •  'description': строка — краткое описание упражнения.
@@ -63,22 +62,21 @@ async def submit_card(card: CardInput):
             ]
         )
 
-        raw_result = response["choices"][0]["message"]["content"].strip()
+        result = response["choices"][0]["message"]["content"].strip()
 
-        # Удаление лишнего, если ответ начинается с ```json
-        if raw_result.startswith("```json"):
-            raw_result = raw_result.removeprefix("```json").removesuffix("```").strip()
+        # Очистка от обёртки ```json
+        if result.startswith("```json"):
+            result = result.removeprefix("```json").removesuffix("```").strip()
 
-        # Парсинг JSON
-        json_data = json.loads(raw_result)
+        exercises = json.loads(result)
 
-        return {"result": json_data}
+        return {"result": exercises}
 
     except Exception as e:
         print("❌ Ошибка:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-# Локальный запуск
+# Запуск локально
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
