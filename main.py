@@ -63,15 +63,15 @@ async def generate_meditation(card: CardInput):
         meditation_text = chat_response.choices[0].message.content.strip()
 
         # Генерация уникального имени файла
-        filename = f"{uuid.uuid4()}.ogg"
+        filename = f"{uuid.uuid4()}.mp3"
         filepath = os.path.join(AUDIO_DIR, filename)
 
-        # Преобразование текста в речь (OGG)
+        # Преобразование текста в речь (MP3)
         speech_response = client.audio.speech.create(
             model="tts-1",
             voice="nova",
             input=meditation_text,
-            response_format="ogg"
+            response_format="mp3"
         )
 
         # Сохранение аудио
@@ -81,8 +81,8 @@ async def generate_meditation(card: CardInput):
         # Возврат файла
         return FileResponse(
             path=filepath,
-            media_type="audio/ogg",
-            filename="meditation.ogg"
+            media_type="audio/mpeg",
+            filename="meditation.mp3"
         )
 
     except Exception as e:
