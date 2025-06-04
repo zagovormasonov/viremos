@@ -12,6 +12,9 @@ import uuid
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Инициализация клиента OpenAI
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 # Инициализация FastAPI
 app = FastAPI()
 
@@ -31,7 +34,6 @@ class CardInput(BaseModel):
     emotions: str
     behavior: str
 
-
 # Создаём директорию для аудио, если её нет
 AUDIO_DIR = "audios"
 os.makedirs(AUDIO_DIR, exist_ok=True)
@@ -44,7 +46,7 @@ async def generate_meditation():
 Сгенерируй короткую медитацию на русском языке в женском спокойном стиле, длительностью до 2 минут. Начни с фразы "Устройся удобно..." и используй расслабляющий, поддерживающий тон.
 """
 
-        chat_response = openai.ChatCompletion.create(
+        chat_response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "Ты медитативный гид."},
@@ -52,14 +54,14 @@ async def generate_meditation():
             ]
         )
 
-        meditation_text = chat_response["choices"][0]["message"]["content"].strip()
+        meditation_text = chat_response.choices[0].message.content.strip()
 
         # Генерация уникального имени файла
         filename = f"{uuid.uuid4()}.ogg"
         filepath = os.path.join(AUDIO_DIR, filename)
 
         # Преобразование текста в речь (OGG)
-        speech_response = openai.audio.speech.create(
+        speech_response = client.audio.speech.create(
             model="tts-1",
             voice="nova",  # Женский голос
             input=meditation_text,
@@ -82,8 +84,6 @@ async def generate_meditation():
             status_code=500,
             content={"error": str(e)}
         )
-
-
 
 # Эндпоинт генерации упражнений
 @app.post("/", response_class=JSONResponse)
@@ -109,7 +109,7 @@ async def generate_exercises(card: CardInput):
 Ответ должен быть ТОЛЬКО в виде корректного JSON без лишнего текста.
 """
 
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Ты когнитивный психолог."},
@@ -117,7 +117,7 @@ async def generate_exercises(card: CardInput):
             ]
         )
 
-        result = response["choices"][0]["message"]["content"].strip()
+        result = response.choices[0].message.content.strip()
 
         # Очистка от обёртки ```json
         if result.startswith("```json"):
@@ -130,7 +130,6 @@ async def generate_exercises(card: CardInput):
     except Exception as e:
         print("❌ Ошибка:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
-
 
 # Запуск локально
 if __name__ == "__main__":
