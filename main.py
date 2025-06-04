@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import openai
 import os
 import json
 from dotenv import load_dotenv
+import uuid
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -29,6 +30,60 @@ class CardInput(BaseModel):
     thoughts: str
     emotions: str
     behavior: str
+
+
+# Создаём директорию для аудио, если её нет
+AUDIO_DIR = "audios"
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+@app.get("/generate-meditation")
+async def generate_meditation():
+    try:
+        # Генерация текста медитации
+        prompt = """
+Сгенерируй короткую медитацию на русском языке в женском спокойном стиле, длительностью до 2 минут. Начни с фразы "Устройся удобно..." и используй расслабляющий, поддерживающий тон.
+"""
+
+        chat_response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Ты медитативный гид."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        meditation_text = chat_response["choices"][0]["message"]["content"].strip()
+
+        # Генерация уникального имени файла
+        filename = f"{uuid.uuid4()}.ogg"
+        filepath = os.path.join(AUDIO_DIR, filename)
+
+        # Преобразование текста в речь (OGG)
+        speech_response = openai.audio.speech.create(
+            model="tts-1",
+            voice="nova",  # Женский голос
+            input=meditation_text,
+            response_format="ogg"
+        )
+
+        # Сохранение аудио
+        with open(filepath, "wb") as f:
+            f.write(speech_response.content)
+
+        # Возврат файла
+        return FileResponse(
+            path=filepath,
+            media_type="audio/ogg",
+            filename="meditation.ogg"
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
 
 # Эндпоинт генерации упражнений
 @app.post("/", response_class=JSONResponse)
