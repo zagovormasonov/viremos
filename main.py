@@ -38,12 +38,18 @@ class CardInput(BaseModel):
 AUDIO_DIR = "audios"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-@app.get("/generate-meditation")
-async def generate_meditation():
+@app.post("/generate-meditation")
+async def generate_meditation(card: CardInput):
     try:
-        # Генерация текста медитации
-        prompt = """
-Сгенерируй короткую медитацию на русском языке в женском спокойном стиле, длительностью до 2 минут. Начни с фразы "Устройся удобно..." и используй расслабляющий, поддерживающий тон.
+        # Генерация текста медитации с учётом данных карточки
+        prompt = f"""
+Сгенерируй короткую медитацию на русском языке в женском спокойном стиле, длительностью до 2 минут. 
+Начни с фразы "Устройся удобно..." и используй расслабляющий, поддерживающий тон.
+Учти следующую информацию о ситуации пользователя:
+Ситуация: {card.situation}
+Мысли: {card.thoughts}
+Эмоции: {card.emotions}
+Поведение: {card.behavior}
 """
 
         chat_response = client.chat.completions.create(
@@ -63,7 +69,7 @@ async def generate_meditation():
         # Преобразование текста в речь (OGG)
         speech_response = client.audio.speech.create(
             model="tts-1",
-            voice="nova",  # Женский голос
+            voice="nova",
             input=meditation_text,
             response_format="ogg"
         )
