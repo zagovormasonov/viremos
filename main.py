@@ -66,7 +66,7 @@ async def generate_meditation(card: CardInput):
             """
 
         chat_response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "Ты медитативный гид."},
                 {"role": "user", "content": prompt}
@@ -83,7 +83,7 @@ async def generate_meditation(card: CardInput):
         # Преобразование текста в речь (MP3)
         speech_response = client.audio.speech.create(
             model="tts-1",
-            voice="nova",
+            voice="sage",
             input=meditation_text,
             response_format="mp3"
         )
