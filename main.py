@@ -7,6 +7,8 @@ import os
 import json
 from dotenv import load_dotenv
 import uuid
+from pydub import AudioSegment
+import tempfile
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -37,6 +39,9 @@ class CardInput(BaseModel):
 # Создаём директорию для аудио, если её нет
 AUDIO_DIR = "audios"
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+# Путь к фоновой музыке
+BACKGROUND_MUSIC_PATH = "audio/background_music.mp3"
 
 @app.post("/generate-meditation")
 async def generate_meditation(card: CardInput):
@@ -74,16 +79,39 @@ async def generate_meditation(card: CardInput):
             response_format="mp3"
         )
 
-        # Сохранение аудио
-        with open(filepath, "wb") as f:
-            f.write(speech_response.content)
+        # Создаем временный файл для TTS
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_tts_file:
+            temp_tts_file.write(speech_response.content)
+            temp_tts_file_path = temp_tts_file.name
 
-        # Возврат файла
-        return FileResponse(
-            path=filepath,
-            media_type="audio/mpeg",
-            filename="meditation.mp3"
-        )
+        try:
+            # Загружаем голос и фоновую музыку
+            voice_audio = AudioSegment.from_mp3(temp_tts_file_path)
+            background_music = AudioSegment.from_mp3(BACKGROUND_MUSIC_PATH)
+
+            # Урезаем фоновую музыку до длины голосового аудио
+            background_music = background_music[:len(voice_audio)]
+
+            # Уменьшаем громкость фоновой музыки (например, на -20 дБ)
+            background_music = background_music - 20
+
+            # Накладываем фоновую музыку на голос
+            combined_audio = voice_audio.overlay(background_music)
+
+            # Сохраняем ит tradesоговый аудиофайл
+            combined_audio.export(filepath, format="mp3")
+
+            # Возврат файла
+            return FileResponse(
+                path=filepath,
+                media_type="audio/mpeg",
+                filename="meditation.mp3"
+            )
+
+        finally:
+            # Удаляем временный файл TTS
+            if os.path.exists(temp_tts_file_path):
+                os.remove(temp_tts_file_path)
 
     except Exception as e:
         return JSONResponse(
@@ -112,7 +140,7 @@ async def generate_exercises(card: CardInput):
     •  'stepTitle': строка — название шага.
     •  'stepDescription': строка — что делать.
     •  'inputRequired': true/false — нужно ли ввести текст.
-Ответ должен быть ТОЛЬКО в виде корректного JSON без лишнего текста.
+Ответ должен быть ТОЛЬКО вложенный JSON без лишнего текста.
 """
 
         response = client.chat.completions.create(
