@@ -9,6 +9,11 @@ from dotenv import load_dotenv
 import uuid
 from pydub import AudioSegment
 import tempfile
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -46,9 +51,11 @@ BACKGROUND_MUSIC_PATH = "audio/background_music.mp3"
 @app.post("/generate-meditation")
 async def generate_meditation(card: CardInput):
     try:
+        logger.info(f"Received request with input: {card.dict()}")
+
         # Генерация текста медитации с учётом данных карточки
         prompt = f"""
-Сгенерируй короткую медитацию с легкой музыкой на заднем фоне, на русском языке в женском спокойном стиле, длительностью до 2 минут. 
+Сгенерируй короткую медитацию (до 200 слов) с легкой музыкой на заднем фоне, на русском языке в женском спокойном стиле, длительностью до 2 минут. 
 Начни с фразы "Устройся удобно..." и используй расслабляющий, поддерживающий тон.
 Учти следующую информацию о ситуации пользователя:
 Ситуация: {card.situation}
@@ -66,6 +73,7 @@ async def generate_meditation(card: CardInput):
         )
 
         meditation_text = chat_response.choices[0].message.content.strip()
+        logger.info(f"Generated meditation text: {meditation_text[:100]}...")
 
         # Генерация уникального имени файла
         filename = f"{uuid.uuid4()}.mp3"
@@ -85,21 +93,38 @@ async def generate_meditation(card: CardInput):
             temp_tts_file_path = temp_tts_file.name
 
         try:
-            # Загружаем голос и фоновую музыку
+            # Загружаем голос
             voice_audio = AudioSegment.from_mp3(temp_tts_file_path)
-            background_music = AudioSegment.from_mp3(BACKGROUND_MUSIC_PATH)
+            logger.info(f"Voice audio loaded, duration: {len(voice_audio)/1000:.2f} seconds")
 
-            # Урезаем фоновую музыку до длины голосового аудио
-            background_music = background_music[:len(voice_audio)]
+            # Проверяем наличие фоновой музыки
+            if os.path.exists(BACKGROUND_MUSIC_PATH):
+                try:
+                    background_music = AudioSegment.from_mp3(BACKGROUND_MUSIC_PATH)
+                    logger.info(f"Background music loaded, duration: {len(background_music)/1000:.2f} seconds")
+                    # Урезаем фоновую музыку до длины голосового аудио
+                    background_music = background_music[:len(voice_audio)]
+                    # Уменьшаем громкость фоновой музыки
+                    background_music = background_music - 20
+                    # Накладываем фоновую музыку на голос
+                    combined_audio = voice_audio.overlay(background_music)
+                    # Сохраняем итоговый аудиофайл
+                    combined_audio.export(filepath, format="mp3", bitrate="64k")
+                    logger.info(f"Combined audio exported to {filepath}")
+                except Exception as e:
+                    logger.error(f"Ошибка при наложении музыки: {e}")
+                    # Если музыка не удалась, сохраняем только голос
+                    voice_audio.export(filepath, format="mp3", bitrate="64k")
+            else:
+                logger.warning(f"Фоновый файл {BACKGROUND_MUSIC_PATH} не найден, возвращаем только голос")
+                voice_audio.export(filepath, format="mp3", bitrate="64k")
 
-            # Уменьшаем громкость фоновой музыки (например, на -20 дБ)
-            background_music = background_music - 30
-
-            # Накладываем фоновую музыку на голос
-            combined_audio = voice_audio.overlay(background_music)
-
-            # Сохраняем ит tradesоговый аудиофайл
-            combined_audio.export(filepath, format="mp3")
+            # Очистка старых файлов (старше 1 часа)
+            for old_file in os.listdir(AUDIO_DIR):
+                old_file_path = os.path.join(AUDIO_DIR, old_file)
+                if os.path.isfile(old_file_path) and os.path.getmtime(old_file_path) < time.time() - 3600:
+                    os.remove(old_file_path)
+                    logger.info(f"Удален старый файл: {old_file_path}")
 
             # Возврат файла
             return FileResponse(
@@ -112,8 +137,10 @@ async def generate_meditation(card: CardInput):
             # Удаляем временный файл TTS
             if os.path.exists(temp_tts_file_path):
                 os.remove(temp_tts_file_path)
+                logger.info(f"Удален временный файл TTS: {temp_tts_file_path}")
 
     except Exception as e:
+        logger.error(f"Ошибка при генерации медитации: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
@@ -162,7 +189,7 @@ async def generate_exercises(card: CardInput):
         return {"result": exercises}
 
     except Exception as e:
-        print("❌ Ошибка:", e)
+        logger.error(f"Ошибка при генерации упражнений: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # Запуск локально
