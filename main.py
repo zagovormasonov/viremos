@@ -83,7 +83,7 @@ async def generate_meditation(card: CardInput):
         # Преобразование текста в речь (MP3)
         speech_response = client.audio.speech.create(
             model="tts-1",
-            voice="sage",
+            voice="ash",
             input=meditation_text,
             response_format="mp3"
         )
