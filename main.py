@@ -106,7 +106,7 @@ async def generate_meditation(card: CardInput):
                     # Урезаем фоновую музыку до длины голосового аудио
                     background_music = background_music[:len(voice_audio)]
                     # Уменьшаем громкость фоновой музыки
-                    background_music = background_music - 20
+                    background_music = background_music - 10
                     # Накладываем фоновую музыку на голос
                     combined_audio = voice_audio.overlay(background_music)
                     # Сохраняем итоговый аудиофайл
