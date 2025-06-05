@@ -66,7 +66,7 @@ async def generate_meditation(card: CardInput):
             """
 
         chat_response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Ты медитативный гид."},
                 {"role": "user", "content": prompt}
