@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import openai
 import os
 import json
+import time
 from dotenv import load_dotenv
 import uuid
 from pydub import AudioSegment
