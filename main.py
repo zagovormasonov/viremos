@@ -42,7 +42,7 @@ class CardInput(BaseModel):
     behavior: str
 
 # Создаём директорию для аудио, если её нет
-AUDIO_DIR = "audios"
+AUDIO_DIR = "audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 # Путь к фоновой музыке
@@ -150,6 +150,8 @@ async def generate_meditation(card: CardInput):
 @app.post("/", response_class=JSONResponse)
 async def generate_exercises(card: CardInput):
     try:
+        logger.info(f"Received exercise request with input: {card.dict()}")
+
         prompt = f"""
 Пользователь предоставил следующую информацию о своей ситуации:
 
@@ -166,8 +168,8 @@ async def generate_exercises(card: CardInput):
 •  'steps': массив объектов с:
     •  'stepTitle': строка — название шага.
     •  'stepDescription': строка — что делать.
-    •  'inputRequired': true/false — нужно ли ввести текст.
-Ответ должен быть ТОЛЬКО вложенный JSON без лишнего текста.
+    •  'inputRequired': boolean — нужно ли ввести текст.
+Ответ должен быть ТОЛЬКО валидным JSON без лишнего текста. Если JSON невалидный, верни пустой массив [].
 """
 
         response = client.chat.completions.create(
@@ -179,12 +181,20 @@ async def generate_exercises(card: CardInput):
         )
 
         result = response.choices[0].message.content.strip()
+        logger.info(f"Raw response from OpenAI: {result[:100]}...")
 
         # Очистка от обёртки ```json
         if result.startswith("```json"):
             result = result.removeprefix("```json").removesuffix("```").strip()
 
-        exercises = json.loads(result)
+        try:
+            exercises = json.loads(result)
+            if not isinstance(exercises, list):
+                logger.warning("Response is not a list, returning empty array")
+                exercises = []
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error: {e}, returning empty array")
+            exercises = []
 
         return {"result": exercises}
 
