@@ -27,9 +27,7 @@ openai_client = openai.OpenAI(api_key=openai_api_key)
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
 # Инициализация FastAPI
-
 app = FastAPI()
-
 
 # Разрешение CORS
 app.add_middleware(
@@ -82,7 +80,6 @@ async def generate_meditation(card: CardInput):
         filepath = os.path.join(AUDIO_DIR, filename)
 
         # Генерация аудио
-        # Генерация аудио (правильная обработка генератора)
         try:
             audio_generator = elevenlabs_client.text_to_speech.convert(
                 voice_id="EXAVITQu4vr4xnSDxMaL",
@@ -95,10 +92,9 @@ async def generate_meditation(card: CardInput):
             logger.error(f"Ошибка TTS ElevenLabs: {e}")
             return JSONResponse(status_code=500, content={"error": "Ошибка при генерации аудио"})
 
-
         # Временный файл для голоса
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
-            temp_file.write(audio)
+            temp_file.write(audio_bytes)
             temp_file_path = temp_file.name
 
         try:
