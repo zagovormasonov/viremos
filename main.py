@@ -43,7 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Модель входных данных
+# Pydantic-модель входных данных
 class CardInput(BaseModel):
     situation: str
     thoughts: str
@@ -133,7 +133,7 @@ async def generate_meditation(card: CardInput):
                     combined.export(filepath, format="mp3", bitrate="64k")
                     logger.info(f"Комбинированный трек сохранён: {filepath}")
                 except Exception as e:
-                    logger.error(f"Ошибка наложения фоновой музыки: {e}")
+                    logger.error(f"Ошибка наложения фоновой музыки:\n{e}")
                     # Если не удалось наложить, сохраняем только голос
                     voice_audio.export(filepath, format="mp3", bitrate="64k")
                     logger.info(f"Сохранён только голос: {filepath}")
@@ -230,5 +230,6 @@ async def generate_exercises(card: CardInput):
 # Для локального тестирования
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000, 8000))
+    # Правильное получение порта: первый аргумент — ключ, второй — значение по умолчанию (строка)
+    port = int(os.environ.get("PORT", "8000"))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
