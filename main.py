@@ -11,6 +11,7 @@ import uuid
 from pydub import AudioSegment
 import tempfile
 import logging
+from openai import OpenAI
 from elevenlabs.client import ElevenLabs
 
 # Настройка логирования
@@ -23,13 +24,11 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
 if not openai_api_key or not elevenlabs_api_key:
-    logger.error("Переменные OPENAI_API_KEY или ELEVENLABS_API_KEY не заданы в окружении")
-    raise RuntimeError("Не установлены ключи API")
+    logger.error("Переменные OPENAI_API_KEY или ELEVENLABS_API_KEY не установлены.")
+    raise RuntimeError("Отсутствуют ключи API в окружении.")
 
-# Настройка OpenAI (версия >= 1.0.0)
-openai_client = openai.OpenAI(api_key=openai_api_key)
-
-# Инициализация ElevenLabs клиента
+# Инициализация клиентов
+openai_client = OpenAI(api_key=openai_api_key)
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
 # Инициализация FastAPI
@@ -44,7 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic-модель входных данных
+# Модель входных данных
 class CardInput(BaseModel):
     situation: str
     thoughts: str
@@ -55,7 +54,7 @@ class CardInput(BaseModel):
 AUDIO_DIR = "audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Опциональный трек для фона
+# Путь к фоновой музыке (опционально)
 BACKGROUND_MUSIC_PATH = "audio/background_music.mp3"
 
 @app.post("/generate-meditation")
@@ -63,18 +62,18 @@ async def generate_meditation(card: CardInput):
     try:
         logger.info(f"Получены данные для медитации: {card.dict()}")
 
-        # 1) Сформировать prompt для GPT
+        # 1. Составляем prompt для GPT
         prompt = f"""
 Сгенерируй короткую медитацию (до 400 слов) на русском языке, в женском спокойном стиле, 
-с медленным, расслабляющим тоном. Начни с фразы "Устройся удобно..." 
-и используй информацию:
+с медленным, расслабляющим тоном. Начни с фразы "Устройся удобно..." и создай медитацию 
+длительностью около 3 минут. Используй следующую информацию:
 Ситуация: {card.situation}
 Мысли: {card.thoughts}
 Эмоции: {card.emotions}
 Поведение: {card.behavior}
 """
 
-        # 2) Вызов OpenAI
+        # 2. Запрос к GPT-3.5 через новый клиент
         chat_response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -84,25 +83,28 @@ async def generate_meditation(card: CardInput):
             max_tokens=600
         )
         meditation_text = chat_response.choices[0].message.content.strip()
-        logger.info(f"Сгенерирован текст: {meditation_text[:100]}...")
+        logger.info(f"Сгенерирован текст (первые 100 chars): {meditation_text[:100]}...")
 
-        # 3) Уникальное имя для итогового MP3
+        # 3. Подготовка уникального имени mp3
         filename = f"{uuid.uuid4()}.mp3"
         filepath = os.path.join(AUDIO_DIR, filename)
 
-        # 4) Генерация аудио через ElevenLabs
+        # 4. Генерация аудио через ElevenLabs
         try:
             audio_generator = elevenlabs_client.text_to_speech.convert(
-                voice_id="EXAVITQu4vr4xnSDxMaL",    # проверьте, что этот голос существует
-                model_id="eleven_multilingual_v2",  # и этот ID модели актуален
+                voice_id="EXAVITQu4vr4xnSDxMaL",    # Проверьте, что голос доступен
+                model_id="eleven_multilingual_v2",  # Проверьте, что модель существует
                 text=meditation_text,
                 output_format="mp3_44100_64"
             )
             audio_bytes = b"".join(audio_generator)
         except Exception as e:
+            # Логируем полную трассировку в консоль
             import traceback
             tb = traceback.format_exc()
             logger.error(f"Ошибка ElevenLabs TTS:\n{tb}")
+
+            # Возвращаем клиенту текст ошибки (для отладки)
             return JSONResponse(
                 status_code=500,
                 content={
@@ -111,33 +113,35 @@ async def generate_meditation(card: CardInput):
                 }
             )
 
-        # 5) Записать полученные байты в временный mp3-файл
+        # 5. Сохраняем результат во временный mp3-файл
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
             temp_file.write(audio_bytes)
             temp_file_path = temp_file.name
 
         try:
+            # 6. Загружаем голосовое аудио в pydub
             voice_audio = AudioSegment.from_mp3(temp_file_path)
             logger.info(f"Длина голосового аудио: {len(voice_audio) / 1000:.2f} сек")
 
-            # 6) Наложение фоновой музыки (если файл есть)
+            # 7. Если есть фоновая музыка — накладываем её
             if os.path.exists(BACKGROUND_MUSIC_PATH):
                 try:
                     background = AudioSegment.from_mp3(BACKGROUND_MUSIC_PATH)
-                    # Обрезать фон до длины голоса и сделать его тише на 10 dB
+                    # Обрезаем фон до длины голоса и убавляем громкость на 10 dB
                     background = background[: len(voice_audio)] - 10
                     combined = voice_audio.overlay(background)
                     combined.export(filepath, format="mp3", bitrate="64k")
                     logger.info(f"Комбинированный трек сохранён: {filepath}")
                 except Exception as e:
-                    logger.error(f"Ошибка наложения фоновой музыки:\n{e}")
+                    logger.error(f"Ошибка наложения фоновой музыки: {e}")
+                    # Если не удалось наложить, сохраняем только голос
                     voice_audio.export(filepath, format="mp3", bitrate="64k")
                     logger.info(f"Сохранён только голос: {filepath}")
             else:
-                logger.warning("Фоновая музыка не найдена, сохраняем только голос")
+                logger.warning("Фоновая музыка не найдена, сохраняем только голосовое аудио.")
                 voice_audio.export(filepath, format="mp3", bitrate="64k")
 
-            # 7) Удалить старые mp3 (старше 1 часа)
+            # 8. Удаляем старые файлы (старше 1 часа)
             now_ts = time.time()
             for old_file in os.listdir(AUDIO_DIR):
                 old_path = os.path.join(AUDIO_DIR, old_file)
@@ -145,7 +149,7 @@ async def generate_meditation(card: CardInput):
                     os.remove(old_path)
                     logger.info(f"Удалён старый файл: {old_path}")
 
-            # 8) Отправить финальный mp3 клиенту
+            # 9. Возвращаем готовый mp3-файл клиенту
             return FileResponse(
                 path=filepath,
                 media_type="audio/mpeg",
@@ -153,15 +157,14 @@ async def generate_meditation(card: CardInput):
             )
 
         finally:
-            # Всегда удалять временный mp3 с голосом
+            # Всегда удаляем временный файл с голосом
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
                 logger.info(f"Удалён временный файл TTS: {temp_file_path}")
 
     except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        logger.error(f"Ошибка всего процесса:\n{tb}")
+        # Ловим любую неожиданную ошибку всего процесса
+        logger.error(f"Ошибка при генерации медитации:\n{e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/", response_class=JSONResponse)
@@ -176,7 +179,7 @@ async def generate_exercises(card: CardInput):
 Эмоции: {card.emotions}
 Поведение: {card.behavior}
 
-Сформируй JSON-массив упражнений формата:
+Сформируй JSON-массив упражнений в формате:
 [
   {{
     "title": "Название упражнения",
@@ -192,7 +195,7 @@ async def generate_exercises(card: CardInput):
     ]
   }}
 ]
-Ответ должен быть ТОЛЬКО валидным JSON.
+Ответ должен быть ТОЛЬКО валидным JSON без лишнего текста.
 """
 
         response = openai_client.chat.completions.create(
@@ -212,24 +215,20 @@ async def generate_exercises(card: CardInput):
         try:
             exercises = json.loads(raw)
             if not isinstance(exercises, list):
-                logger.warning("Результат парсинга не список, возвращаю []")
+                logger.warning("Результат не список, возвращаю пустой массив.")
                 exercises = []
         except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            logger.error(f"Ошибка парсинга JSON в упражнениях:\n{tb}")
+            logger.error(f"Ошибка парсинга JSON:\n{e}")
             exercises = []
 
         return {"result": exercises}
 
     except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        logger.error(f"Ошибка генерации упражнений:\n{tb}")
+        logger.error(f"Ошибка при генерации упражнений:\n{e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # Для локального тестирования
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8000, 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
