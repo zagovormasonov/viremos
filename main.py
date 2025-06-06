@@ -30,6 +30,7 @@ elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
 app = FastAPI()
 
+
 # Разрешение CORS
 app.add_middleware(
     CORSMiddleware,
