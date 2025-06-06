@@ -82,16 +82,19 @@ async def generate_meditation(card: CardInput):
         filepath = os.path.join(AUDIO_DIR, filename)
 
         # Генерация аудио
+        # Генерация аудио (правильная обработка генератора)
         try:
-            audio = elevenlabs_client.text_to_speech.convert(
+            audio_generator = elevenlabs_client.text_to_speech.convert(
                 voice_id="EXAVITQu4vr4xnSDxMaL",
                 model_id="eleven_multilingual_v2",
                 text=meditation_text,
                 output_format="mp3_44100_64"
             )
+            audio_bytes = b"".join(audio_generator)
         except Exception as e:
             logger.error(f"Ошибка TTS ElevenLabs: {e}")
             return JSONResponse(status_code=500, content={"error": "Ошибка при генерации аудио"})
+
 
         # Временный файл для голоса
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
