@@ -27,6 +27,7 @@ openai_client = openai.OpenAI(api_key=openai_api_key)
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
 # Инициализация FastAPI
+
 app = FastAPI()
 
 # Разрешение CORS
